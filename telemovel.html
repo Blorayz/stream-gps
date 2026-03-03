@@ -2,245 +2,254 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>GPS → Stream</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesla Nav Widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { height:100%; background:#0a0b0d; font-family:'Space Mono', monospace; color:#e8e9ea; }
+body { background: transparent; font-family: 'Inter', sans-serif; }
+#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
 
-body {
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  min-height:100vh; padding:24px;
+/* ── MAP AREA ── */
+#map { width:400px; height:230px; position:relative; background:#1a1c1f; overflow:hidden; }
+
+/* 3x3 grid of tiles */
+#tile-grid {
+  position:absolute;
+  display:grid;
+  grid-template-columns: repeat(3,256px);
+  grid-template-rows: repeat(3,256px);
+  top:0; left:0;
+  transition: transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
+  image-rendering: auto;
+}
+#tile-grid img {
+  width:256px; height:256px; display:block;
+  filter: invert(100%) hue-rotate(180deg) brightness(0.75) saturate(0.8) contrast(1.1);
+  pointer-events:none;
 }
 
-.card {
-  width:100%; max-width:360px;
-  background:#111214;
-  border:1px solid rgba(255,255,255,.07);
-  border-radius:24px;
-  padding:32px 24px;
-  display:flex; flex-direction:column; align-items:center; gap:28px;
+/* Car marker – centred in #map */
+#car-marker {
+  position:absolute;
+  width:18px; height:18px;
+  background:#3B6CFF;
+  border-radius:50%;
+  border:3px solid #E8E9EA;
+  box-shadow:0 0 14px rgba(59,108,255,.9);
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  z-index:10;
+  pointer-events:none;
 }
 
-.logo {
-  font-size:11px; font-weight:700; letter-spacing:3px; color:#3B6CFF;
-  text-transform:uppercase;
+#map::after {
+  content:'';
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px);
+  pointer-events:none; z-index:11;
 }
+#map-fade {
+  position:absolute; bottom:0; left:0; right:0; height:70px;
+  background:linear-gradient(transparent,#111214);
+  z-index:12; pointer-events:none;
+}
+#city-name {
+  position:absolute; bottom:76px; left:50%; transform:translateX(-50%);
+  font-size:10px; font-weight:700; color:rgba(232,233,234,.75);
+  text-transform:uppercase; letter-spacing:2.5px; z-index:13;
+  white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none;
+}
+#gps-dot {
+  position:absolute; top:12px; right:12px;
+  width:9px; height:9px; border-radius:50%;
+  background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7);
+  z-index:13; animation:gps-pulse 2s ease-in-out infinite;
+}
+#gps-dot.offline { background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); animation:none; }
+@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
 
-.status-ring {
-  position:relative; width:120px; height:120px;
-  display:flex; align-items:center; justify-content:center;
-}
-.ring {
-  position:absolute; inset:0; border-radius:50%;
-  border:2px solid rgba(59,108,255,.15);
-}
-.ring-pulse {
-  position:absolute; inset:0; border-radius:50%;
-  border:2px solid #3B6CFF;
-  opacity:0; animation:none;
-}
-.ring-pulse.active { animation: ripple 2s ease-out infinite; }
-@keyframes ripple {
-  0% { transform:scale(1); opacity:.6; }
-  100% { transform:scale(1.5); opacity:0; }
-}
-.center-dot {
-  width:48px; height:48px; border-radius:50%;
-  background:#1a1c1f;
-  border:2px solid rgba(255,255,255,.1);
-  display:flex; align-items:center; justify-content:center;
-  font-size:22px;
-  transition: background .3s, border-color .3s;
-  position:relative; z-index:1;
-}
-.center-dot.sending { background:#0d1a2e; border-color:#3B6CFF; }
-.center-dot.error   { background:#1f0d0d; border-color:#FF6B5B; }
-
-.status-text {
-  font-size:11px; letter-spacing:2px; text-transform:uppercase;
-  color:#8A8F99; text-align:center; line-height:1.6;
-}
-.status-text span { display:block; }
-.status-text .main { font-size:13px; color:#e8e9ea; font-weight:700; margin-bottom:4px; }
-
-.coords-box {
-  width:100%; background:#0a0b0d;
-  border:1px solid rgba(255,255,255,.05);
-  border-radius:14px; padding:14px 18px;
-  display:flex; flex-direction:column; gap:6px;
-}
-.coord-row { display:flex; justify-content:space-between; align-items:center; }
-.coord-label { font-size:9px; letter-spacing:2px; color:#8A8F99; text-transform:uppercase; }
-.coord-val { font-size:12px; color:#3B6CFF; font-weight:700; }
-
-.btn {
-  width:100%; padding:16px;
-  border-radius:14px; border:none; cursor:pointer;
-  font-family:'Space Mono', monospace;
-  font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
-  transition: all .2s;
-}
-.btn-start {
-  background:#3B6CFF; color:#fff;
-  box-shadow: 0 0 24px rgba(59,108,255,.3);
-}
-.btn-start:hover { background:#5585ff; }
-.btn-start:active { transform:scale(.98); }
-.btn-stop {
-  background:transparent; color:#FF6B5B;
-  border:1px solid rgba(255,107,91,.3);
-}
-.btn-stop:hover { background:rgba(255,107,91,.08); }
-
-.updates-log {
-  width:100%;
-  font-size:10px; color:#8A8F99; letter-spacing:.5px;
-  text-align:center; line-height:1.8;
-  min-height:20px;
-}
-.updates-log .ok { color:#2ECC71; }
-.updates-log .err { color:#FF6B5B; }
-
-.footer {
-  font-size:9px; color:rgba(138,143,153,.5); letter-spacing:1px;
-  text-align:center; text-transform:uppercase;
-}
+/* ── BOTTOM BAR ── */
+#bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
+.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
+.nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
+.nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
+.nav-value.temp { color:#3B6CFF; }
+.nav-value.time { font-size:34px; }
+.nav-value.zone { color:#F0AD4E; font-size:12px; letter-spacing:0; text-align:center; }
+.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
+.nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
+#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); z-index:502; animation:gps-pulse 2s ease-in-out infinite; }
+@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
 </style>
 </head>
 <body>
-
-<div class="card">
-  <div class="logo">⬡ Stream GPS</div>
-
-  <div class="status-ring">
-    <div class="ring"></div>
-    <div class="ring-pulse" id="ringPulse"></div>
-    <div class="center-dot" id="centerDot">📡</div>
+<div id="nav-widget">
+  <div id="map">
+    <div id="tile-grid"></div>
+    <div id="car-marker"></div>
+    <div id="gps-dot"></div>
+    <div id="map-fade"></div>
+    <div id="city-name">A localizar...</div>
+    
   </div>
-
-  <div class="status-text">
-    <span class="main" id="statusMain">Pronto</span>
-    <span id="statusSub">Carrega em Iniciar para começar</span>
-  </div>
-
-  <div class="coords-box">
-    <div class="coord-row">
-      <span class="coord-label">Latitude</span>
-      <span class="coord-val" id="latVal">--</span>
+  <div id="bottom-bar">
+    <div class="nav-item">
+      <span class="nav-label">Temp</span>
+      <span class="nav-value temp" id="tempVal">--</span>
+      <span class="nav-unit">°C</span>
     </div>
-    <div class="coord-row">
-      <span class="coord-label">Longitude</span>
-      <span class="coord-val" id="lngVal">--</span>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-value time" id="timeVal">--:--</span>
     </div>
-    <div class="coord-row">
-      <span class="coord-label">Precisão</span>
-      <span class="coord-val" id="accVal">--</span>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-label">Zona</span>
+      <span class="nav-value zone" id="zoneVal">--</span>
     </div>
   </div>
-
-  <button class="btn btn-start" id="mainBtn" onclick="toggleTracking()">▶ Iniciar</button>
-
-  <div class="updates-log" id="logMsg">Aguardando...</div>
-
-  <div class="footer">Envia GPS → Firebase → Widget</div>
 </div>
 
 <script>
-// ══════════════════════════════════════════
-// 🔧 MUDA AQUI para o teu Firebase URL
-const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
-// ══════════════════════════════════════════
+const RTIRL_KEY = 'pk.eyJ1Ijoia2V2bW8zMTQiLCJhIjoiY2w0MW1qaTh3MG80dzNjcXRndmJ0a2JieiJ9.Y_xABmAqvD-qZeed8MabxQ';
+const RTIRL_URL = `https://api.realtimeirl.com/listeners/${RTIRL_KEY}/latestLocation`;
+const ZOOM = 17;
+const TILE_SIZE = 256;
+// Map viewport: 400x230 → we show a 3×3 grid (768×768) and shift it
+const MAP_W = 400;
+const MAP_H = 230;
 
-let watchId = null;
-let isTracking = false;
-let sendCount = 0;
-
-function toggleTracking() {
-  if (!isTracking) startTracking();
-  else stopTracking();
+// ── Tile math ──────────────────────────────────────────────
+function latLngToTile(lat, lng, z) {
+  const n = Math.pow(2, z);
+  const xf = (lng + 180) / 360 * n;
+  const yf = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+  return { xf, yf, xtile: Math.floor(xf), ytile: Math.floor(yf) };
 }
 
-function startTracking() {
-  if (!navigator.geolocation) {
-    setStatus('error', 'GPS não suportado', 'Usa um browser moderno');
-    return;
+let currentTileX = null, currentTileY = null;
+const grid = document.getElementById('tile-grid');
+
+function buildGrid(xtile, ytile) {
+  // Only rebuild if centre tile changed
+  if (xtile === currentTileX && ytile === currentTileY) return;
+  currentTileX = xtile;
+  currentTileY = ytile;
+
+  grid.innerHTML = '';
+  // 3×3: centre tile is at index [1][1]
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const tx = xtile + dx;
+      const ty = ytile + dy;
+      const subdomains = ['a','b','c'];
+      const s = subdomains[(Math.abs(tx + ty)) % 3];
+      const img = document.createElement('img');
+      img.src = `https://${s}.tile.openstreetmap.org/${ZOOM}/${tx}/${ty}.png`;
+      img.loading = 'eager';
+      grid.appendChild(img);
+    }
   }
-
-  setStatus('waiting', 'A obter GPS...', 'Aceita a permissão de localização');
-  document.getElementById('mainBtn').textContent = '⏹ Parar';
-  document.getElementById('mainBtn').className = 'btn btn-stop';
-  isTracking = true;
-
-  watchId = navigator.geolocation.watchPosition(
-    onPosition,
-    onError,
-    { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-  );
 }
 
-function stopTracking() {
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = null;
-  isTracking = false;
-  setStatus('idle', 'Parado', 'Carrega em Iniciar para recomeçar');
-  document.getElementById('mainBtn').textContent = '▶ Iniciar';
-  document.getElementById('mainBtn').className = 'btn btn-start';
-  document.getElementById('ringPulse').classList.remove('active');
-  document.getElementById('centerDot').className = 'center-dot';
-  document.getElementById('centerDot').textContent = '📡';
+function positionGrid(xf, yf) {
+  // fractional pixel offset of lat/lng within the centre tile
+  const fracX = xf - Math.floor(xf); // 0..1
+  const fracY = yf - Math.floor(yf);
+
+  // Grid origin so the position is centred in the 400×230 viewport
+  // Centre tile starts at grid px (256, 256); the point is at (256 + fracX*256, 256 + fracY*256)
+  // We want that point at (MAP_W/2, MAP_H/2)
+  const ox = MAP_W / 2 - (TILE_SIZE + fracX * TILE_SIZE);
+  const oy = MAP_H / 2 - (TILE_SIZE + fracY * TILE_SIZE);
+
+  grid.style.transform = `translate(${ox}px, ${oy}px)`;
 }
 
-async function onPosition(pos) {
-  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+function updateMap(lat, lng) {
+  const { xf, yf, xtile, ytile } = latLngToTile(lat, lng, ZOOM);
+  buildGrid(xtile, ytile);
+  positionGrid(xf, yf);
+}
 
-  document.getElementById('latVal').textContent = lat.toFixed(6);
-  document.getElementById('lngVal').textContent = lng.toFixed(6);
-  document.getElementById('accVal').textContent = Math.round(accuracy) + 'm';
+// ── Clock ──────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('timeVal').textContent =
+    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+setInterval(updateClock, 1000);
+updateClock();
 
-  setStatus('sending', 'A enviar...', 'Localização activa');
-  document.getElementById('ringPulse').classList.add('active');
-  document.getElementById('centerDot').className = 'center-dot sending';
-  document.getElementById('centerDot').textContent = '🛰️';
-
+// ── Firebase ───────────────────────────────────────────────
+let failCount = 0;
+async function fetchLocation() {
   try {
-    const payload = { lat, lng, accuracy, ts: Date.now() };
-    const res = await fetch(FB_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await fetch(RTIRL_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    // RealtimeIRL devolve { latitude, longitude, timestamp }
+    const lat = data.latitude || data.lat;
+    const lng = data.longitude || data.lng || data.lon;
+    if (!lat || !lng) { failCount++; if (failCount >= 3) setOffline(); return; }
+    failCount = 0;
+    setOnline();
+    updateMap(lat, lng);
+    fetchCity(lat, lng);
+    fetchWeather(lat, lng);
+  } catch(e) { failCount++; if (failCount >= 3) setOffline(); }
+}
+function setOnline()  {}
+function setOffline() {}
 
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    sendCount++;
-    setLog(`<span class="ok">✓ Enviado #${sendCount} — ${new Date().toLocaleTimeString('pt')}</span>`);
-  } catch(e) {
-    setLog(`<span class="err">✗ Erro ao enviar: ${e.message}</span>`);
-    document.getElementById('centerDot').className = 'center-dot error';
-    document.getElementById('centerDot').textContent = '⚠️';
-  }
+// ── Reverse geocode ────────────────────────────────────────
+let lastCity = 0;
+async function fetchCity(lat, lng) {
+  if (Date.now() - lastCity < 30000) return;
+  lastCity = Date.now();
+  try {
+    // Overpass: busca ruas num raio de 25m do ponto exacto — muito mais preciso que Nominatim
+    const overpassQuery = `[out:json];way(around:25,${lat},${lng})[highway][name];out tags 1;`;
+    const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+
+    // Nominatim zoom=10 só para cidade (continua fiável a este nível)
+    const [ovRes, cityRes] = await Promise.all([
+      fetch(overpassUrl).then(r=>r.json()),
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`).then(r=>r.json())
+    ]);
+
+    // Rua: primeiro resultado da Overpass (é a via mais próxima MESMO)
+    const ways = ovRes.elements || [];
+    const road = (ways[0]?.tags?.['name:pt'] || ways[0]?.tags?.name || '');
+
+    // Cidade: Nominatim zoom=10
+    const a2 = cityRes.address || {};
+    const city = cityRes.name || a2.city || a2.town || a2.village || a2.municipality || a2.county || '';
+
+    document.getElementById('city-name').textContent = road || city || 'Em rota...';
+
+    const zoneLabel = city || '--';
+    document.getElementById('zoneVal').textContent =
+      zoneLabel.length > 20 ? zoneLabel.substring(0, 20) + '…' : zoneLabel;
+  } catch(e) {}
 }
 
-function onError(err) {
-  const msgs = {
-    1: 'Permissão negada. Activa o GPS nas definições.',
-    2: 'GPS indisponível.',
-    3: 'Timeout a obter localização.'
-  };
-  setStatus('error', 'Erro GPS', msgs[err.code] || 'Erro desconhecido');
-  document.getElementById('centerDot').className = 'center-dot error';
-  document.getElementById('centerDot').textContent = '⚠️';
+// ── Weather ────────────────────────────────────────────────
+let lastWeather = 0;
+async function fetchWeather(lat, lng) {
+  if (Date.now() - lastWeather < 300000) return;
+  lastWeather = Date.now();
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&timezone=auto`);
+    const d = await res.json();
+    document.getElementById('tempVal').textContent = Math.round(d.current?.temperature_2m ?? '--');
+  } catch(e) {}
 }
 
-function setStatus(type, main, sub) {
-  document.getElementById('statusMain').textContent = main;
-  document.getElementById('statusSub').textContent = sub;
-}
-
-function setLog(html) {
-  document.getElementById('logMsg').innerHTML = html;
-}
+// ── Init ───────────────────────────────────────────────────
+fetchLocation();
+setInterval(fetchLocation, 5000);
 </script>
 </body>
 </html>
