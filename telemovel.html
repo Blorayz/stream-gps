@@ -112,7 +112,7 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 </div>
 
 <script>
-const RTIRL_KEY = 'pk.eyJ1Ijoia2V2bW8zMTQiLCJhIjoiY2w0MW1qaTh3MG80dzNjcXRndmJ0a2JieiJ9.Y_xABmAqvD-qZeed8MabxQ';
+const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
 const ZOOM = 17;
 const TILE_SIZE = 256;
 const MAP_W = 400;
@@ -168,45 +168,31 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── RealtimeIRL WebSocket ──────────────────────────────────
+// ── Firebase ───────────────────────────────────────────────
 function setOnline()  {}
 function setOffline() {}
 
-let ws = null;
-let wsReconnectTimer = null;
-
-function connectWS() {
-  if (ws) { try { ws.close(); } catch(e) {} }
-
-  ws = new WebSocket(`wss://pubsub.realtimeirl.com/sub/${RTIRL_KEY}`);
-
-  ws.onopen = () => {
-    console.log('WS conectado');
-    clearTimeout(wsReconnectTimer);
-  };
-
-  ws.onmessage = (evt) => {
-    try {
-      const data = JSON.parse(evt.data);
-      const lat = data.latitude || data.lat;
-      const lng = data.longitude || data.lng || data.lon;
-      if (!lat || !lng) return;
-      updateMap(lat, lng);
-      fetchCity(lat, lng);
-      fetchWeather(lat, lng);
-    } catch(e) {}
-  };
-
-  ws.onerror = () => scheduleReconnect();
-  ws.onclose = () => scheduleReconnect();
+let failCount = 0;
+async function fetchLocation() {
+  try {
+    const res = await fetch(FB_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    // suporta formato Firebase {lat,lng,ts} e OwnTracks {lat,lon,tst}
+    const lat = data.lat;
+    const lng = data.lng || data.lon;
+    const ts = (data.ts || (data.tst ? data.tst * 1000 : 0));
+    if (!lat || !lng) { failCount++; if (failCount >= 3) setOffline(); return; }
+    if (Date.now() - ts > 60000) { failCount++; if (failCount >= 3) setOffline(); return; }
+    failCount = 0;
+    setOnline();
+    updateMap(lat, lng);
+    fetchCity(lat, lng);
+    fetchWeather(lat, lng);
+  } catch(e) { failCount++; if (failCount >= 3) setOffline(); }
 }
 
-function scheduleReconnect() {
-  clearTimeout(wsReconnectTimer);
-  wsReconnectTimer = setTimeout(connectWS, 5000);
-}
-
-// ── Reverse geocode (Overpass + Nominatim) ─────────────────
+// ── Reverse geocode ────────────────────────────────────────
 let lastCity = 0;
 async function fetchCity(lat, lng) {
   if (Date.now() - lastCity < 30000) return;
@@ -241,7 +227,8 @@ async function fetchWeather(lat, lng) {
 }
 
 // ── Init ───────────────────────────────────────────────────
-connectWS();
+fetchLocation();
+setInterval(fetchLocation, 5000);
 </script>
 </body>
 </html>
