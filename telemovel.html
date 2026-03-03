@@ -177,8 +177,15 @@ async function fetchLocation() {
   try {
     const res = await fetch(FB_URL + '?t=' + Date.now());
     if (!res.ok) throw new Error();
-    const data = await res.json();
-    // suporta formato Firebase {lat,lng,ts} e OwnTracks {lat,lon,tst}
+    let data = await res.json();
+    // OwnTracks guarda como objecto com chaves aleatórias — pegar no mais recente
+    if (data && !data.lat && !data.lng) {
+      const entries = Object.values(data).filter(v => v && v.lat);
+      if (entries.length === 0) { failCount++; if (failCount >= 3) setOffline(); return; }
+      // ordenar por timestamp e pegar no mais recente
+      entries.sort((a, b) => (b.tst || 0) - (a.tst || 0));
+      data = entries[0];
+    }
     const lat = data.lat;
     const lng = data.lng || data.lon;
     const ts = (data.ts || (data.tst ? data.tst * 1000 : 0));
