@@ -177,18 +177,20 @@ async function fetchLocation() {
   try {
     const res = await fetch(FB_URL + '?t=' + Date.now());
     if (!res.ok) throw new Error();
-    let data = await res.json();
-    // OwnTracks guarda como objecto com chaves aleatórias — pegar no mais recente
-    if (data && !data.lat && !data.lng) {
-      const entries = Object.values(data).filter(v => v && v.lat);
-      if (entries.length === 0) { failCount++; if (failCount >= 3) setOffline(); return; }
-      // ordenar por timestamp e pegar no mais recente
-      entries.sort((a, b) => (b.tst || 0) - (a.tst || 0));
-      data = entries[0];
-    }
+    const raw = await res.json();
+    // pegar em todas as entradas que tenham lat (OwnTracks ou formato antigo)
+    const entries = Object.values(raw).filter(v => v && typeof v === 'object' && v.lat);
+    if (entries.length === 0) { failCount++; if (failCount >= 3) setOffline(); return; }
+    // ordenar por timestamp mais recente (tst em segundos ou ts em ms)
+    entries.sort((a, b) => {
+      const ta = a.ts || (a.tst ? a.tst * 1000 : 0);
+      const tb = b.ts || (b.tst ? b.tst * 1000 : 0);
+      return tb - ta;
+    });
+    const data = entries[0];
     const lat = data.lat;
     const lng = data.lng || data.lon;
-    const ts = (data.ts || (data.tst ? data.tst * 1000 : 0));
+    const ts = data.ts || (data.tst ? data.tst * 1000 : 0);
     if (!lat || !lng) { failCount++; if (failCount >= 3) setOffline(); return; }
     if (Date.now() - ts > 60000) { failCount++; if (failCount >= 3) setOffline(); return; }
     failCount = 0;
