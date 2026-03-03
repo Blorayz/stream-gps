@@ -2,25 +2,28 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Stream GPS</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#111214; font-family:-apple-system,sans-serif; color:#E8E9EA; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:24px; }
 .logo { font-size:12px; font-weight:700; letter-spacing:3px; color:#8A8F99; text-transform:uppercase; }
-.card { width:100%; max-width:340px; background:#1A1C1F; border-radius:20px; padding:22px; display:flex; flex-direction:column; gap:14px; }
+.card { width:100%; max-width:340px; background:#1A1C1F; border-radius:20px; padding:22px; display:flex; flex-direction:column; gap:14px; box-shadow:0 4px 24px rgba(0,0,0,.5); }
 .row { display:flex; align-items:center; gap:10px; }
-.dot { width:10px; height:10px; border-radius:50%; background:#8A8F99; }
-.dot.on { background:#2ECC71; }
+.dot { width:10px; height:10px; border-radius:50%; background:#8A8F99; flex-shrink:0; transition:background .3s; }
+.dot.on { background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.5); }
 .dot.err { background:#FF6B5B; }
-.lbl { font-size:12px; font-weight:600; color:#8A8F99; text-transform:uppercase; }
-.val { font-size:14px; font-weight:600; color:#E8E9EA; margin-left:auto; }
-.counter { font-size:26px; font-weight:800; color:#3B6CFF; }
-.counter span { font-size:12px; color:#8A8F99; margin-left:3px; }
-.coords { font-size:11px; color:#8A8F99; text-align:center; }
+.dot.warn { background:#F0AD4E; }
+.lbl { font-size:12px; font-weight:600; color:#8A8F99; text-transform:uppercase; letter-spacing:.8px; }
+.val { font-size:13px; font-weight:600; color:#E8E9EA; margin-left:auto; text-align:right; }
+.counter { font-size:26px; font-weight:800; color:#3B6CFF; letter-spacing:-1px; }
+.counter span { font-size:12px; font-weight:500; color:#8A8F99; margin-left:3px; }
+.coords { font-size:11px; color:#8A8F99; text-align:center; font-family:monospace; }
 .btn { width:100%; max-width:340px; padding:18px; border-radius:14px; border:none; font-size:16px; font-weight:700; cursor:pointer; }
 .btn-start { background:#2ECC71; color:#111214; }
 .btn-stop { background:#FF6B5B; color:#fff; display:none; }
+.wake { font-size:10px; color:#8A8F99; text-align:center; }
+.wake.on { color:#2ECC71; }
 </style>
 </head>
 <body>
@@ -29,41 +32,100 @@ body { background:#111214; font-family:-apple-system,sans-serif; color:#E8E9EA; 
   <div class="row"><div class="dot" id="dGps"></div><span class="lbl">GPS</span><span class="val" id="vGps">Inativo</span></div>
   <div class="row"><div class="dot" id="dFb"></div><span class="lbl">Firebase</span><span class="val" id="vFb">Aguarda</span></div>
   <div class="row"><div class="dot" id="dSend"></div><span class="lbl">Envios</span><div class="counter" id="cnt">0<span>envios</span></div></div>
+  <div class="row"><div class="dot" id="dHb"></div><span class="lbl">Heartbeat</span><span class="val" id="vHb">--</span></div>
   <div class="coords" id="coords">--</div>
 </div>
-<button class="btn btn-start" id="btnStart" onclick="start()">▶ Iniciar Tracking</button>
-<button class="btn btn-stop" id="btnStop" onclick="stop()">■ Parar</button>
+<button class="btn btn-start" id="btnStart" onclick="start()">&#9654; Iniciar Tracking</button>
+<button class="btn btn-stop" id="btnStop" onclick="stop()">&#9632; Parar</button>
+<div class="wake" id="wake">Ecra: normal</div>
 <script>
-const FB="https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json";
-let wid=null,cnt=0,last=0;
-function dot(id,cls){document.getElementById(id).className="dot"+(cls?" "+cls:"");}
-function start(){
-  if(!navigator.geolocation){alert("GPS nao disponivel");return;}
-  document.getElementById("btnStart").style.display="none";
-  document.getElementById("btnStop").style.display="block";
-  dot("dGps","on");
-  wid=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:5000,timeout:10000});
+const FB='https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
+let wid=null,cnt=0,lastSend=0,lastPos=null,wakeLock=null,hbInt=null,rcInt=null;
+
+function dot(id,cls){document.getElementById(id).className='dot'+(cls?' '+cls:'');}
+
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock=await navigator.wakeLock.request('screen');
+      document.getElementById('wake').textContent='Ecra: sempre ligado';
+      document.getElementById('wake').className='wake on';
+      wakeLock.addEventListener('release',()=>{
+        document.getElementById('wake').textContent='Ecra: a reconectar...';
+        document.getElementById('wake').className='wake';
+        setTimeout(requestWakeLock,2000);
+      });
+    }
+  }catch(e){}
 }
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&wid!==null){
+    requestWakeLock();
+    reconnect();
+  }
+});
+
+function reconnect(){
+  if(wid!==null){navigator.geolocation.clearWatch(wid);wid=null;}
+  dot('dGps','warn');
+  document.getElementById('vGps').textContent='A reconectar...';
+  wid=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+}
+
+function start(){
+  if(!navigator.geolocation){alert('GPS nao disponivel');return;}
+  document.getElementById('btnStart').style.display='none';
+  document.getElementById('btnStop').style.display='block';
+  dot('dGps','warn');
+  requestWakeLock();
+  wid=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+  hbInt=setInterval(()=>{if(lastPos)sendFB(lastPos.lat,lastPos.lng,true);},10000);
+  rcInt=setInterval(reconnect,60000);
+}
+
 function stop(){
   if(wid!==null)navigator.geolocation.clearWatch(wid);
-  wid=null;
-  document.getElementById("btnStart").style.display="block";
-  document.getElementById("btnStop").style.display="none";
+  if(hbInt)clearInterval(hbInt);
+  if(rcInt)clearInterval(rcInt);
+  if(wakeLock)wakeLock.release();
+  wid=null;hbInt=null;rcInt=null;
+  document.getElementById('btnStart').style.display='block';
+  document.getElementById('btnStop').style.display='none';
+  document.getElementById('vGps').textContent='Inativo';
+  document.getElementById('wake').textContent='Ecra: normal';
+  document.getElementById('wake').className='wake';
+  dot('dGps','');dot('dFb','');dot('dSend','');dot('dHb','');
 }
+
 async function onPos(p){
   const now=Date.now();
-  if(now-last<5000)return;
-  last=now;
-  const lat=p.coords.latitude,lng=p.coords.longitude,acc=p.coords.accuracy;
-  document.getElementById("vGps").textContent="+-"+Math.round(acc)+"m";
-  document.getElementById("coords").textContent=lat.toFixed(5)+", "+lng.toFixed(5);
-  try{
-    const r=await fetch(FB,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({lat,lng,ts:now})});
-    if(r.ok){cnt++;document.getElementById("cnt").innerHTML=cnt+"<span>envios</span>";document.getElementById("vFb").textContent="OK";dot("dFb","on");dot("dSend","on");}
-    else{document.getElementById("vFb").textContent="Erro "+r.status;dot("dFb","err");}
-  }catch(e){document.getElementById("vFb").textContent="Sem rede";dot("dFb","err");}
+  lastPos={lat:p.coords.latitude,lng:p.coords.longitude};
+  dot('dGps','on');
+  document.getElementById('vGps').textContent='+-'+Math.round(p.coords.accuracy)+'m';
+  document.getElementById('coords').textContent=lastPos.lat.toFixed(5)+', '+lastPos.lng.toFixed(5);
+  if(now-lastSend<5000)return;
+  lastSend=now;
+  await sendFB(lastPos.lat,lastPos.lng,false);
 }
-function onErr(){document.getElementById("vGps").textContent="Erro GPS";dot("dGps","err");}
+
+async function sendFB(lat,lng,isHb){
+  try{
+    const r=await fetch(FB,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({lat,lng,ts:Date.now()})});
+    if(r.ok){
+      if(!isHb){cnt++;document.getElementById('cnt').innerHTML=cnt+'<span>envios</span>';}
+      document.getElementById('vFb').textContent='OK';
+      document.getElementById('vHb').textContent=new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      dot('dFb','on');dot('dSend','on');dot('dHb','on');
+    }else{document.getElementById('vFb').textContent='Erro '+r.status;dot('dFb','err');}
+  }catch(e){document.getElementById('vFb').textContent='Sem rede';dot('dFb','err');}
+}
+
+function onErr(){
+  document.getElementById('vGps').textContent='Erro GPS';
+  dot('dGps','err');
+  setTimeout(reconnect,5000);
+}
 </script>
 </body>
 </html>
