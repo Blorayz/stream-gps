@@ -113,10 +113,8 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 
 <script>
 const RTIRL_KEY = 'pk.eyJ1Ijoia2V2bW8zMTQiLCJhIjoiY2w0MW1qaTh3MG80dzNjcXRndmJ0a2JieiJ9.Y_xABmAqvD-qZeed8MabxQ';
-const RTIRL_URL = `https://api.realtimeirl.com/listeners/${RTIRL_KEY}/latestLocation`;
 const ZOOM = 17;
 const TILE_SIZE = 256;
-// Map viewport: 400x230 → we show a 3×3 grid (768×768) and shift it
 const MAP_W = 400;
 const MAP_H = 230;
 
@@ -132,19 +130,13 @@ let currentTileX = null, currentTileY = null;
 const grid = document.getElementById('tile-grid');
 
 function buildGrid(xtile, ytile) {
-  // Only rebuild if centre tile changed
   if (xtile === currentTileX && ytile === currentTileY) return;
-  currentTileX = xtile;
-  currentTileY = ytile;
-
+  currentTileX = xtile; currentTileY = ytile;
   grid.innerHTML = '';
-  // 3×3: centre tile is at index [1][1]
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      const tx = xtile + dx;
-      const ty = ytile + dy;
-      const subdomains = ['a','b','c'];
-      const s = subdomains[(Math.abs(tx + ty)) % 3];
+      const tx = xtile + dx, ty = ytile + dy;
+      const s = ['a','b','c'][(Math.abs(tx + ty)) % 3];
       const img = document.createElement('img');
       img.src = `https://${s}.tile.openstreetmap.org/${ZOOM}/${tx}/${ty}.png`;
       img.loading = 'eager';
@@ -154,16 +146,10 @@ function buildGrid(xtile, ytile) {
 }
 
 function positionGrid(xf, yf) {
-  // fractional pixel offset of lat/lng within the centre tile
-  const fracX = xf - Math.floor(xf); // 0..1
+  const fracX = xf - Math.floor(xf);
   const fracY = yf - Math.floor(yf);
-
-  // Grid origin so the position is centred in the 400×230 viewport
-  // Centre tile starts at grid px (256, 256); the point is at (256 + fracX*256, 256 + fracY*256)
-  // We want that point at (MAP_W/2, MAP_H/2)
   const ox = MAP_W / 2 - (TILE_SIZE + fracX * TILE_SIZE);
   const oy = MAP_H / 2 - (TILE_SIZE + fracY * TILE_SIZE);
-
   grid.style.transform = `translate(${ox}px, ${oy}px)`;
 }
 
@@ -182,56 +168,63 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── Firebase ───────────────────────────────────────────────
-let failCount = 0;
-async function fetchLocation() {
-  try {
-    const res = await fetch(RTIRL_URL + '?t=' + Date.now());
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    // RealtimeIRL devolve { latitude, longitude, timestamp }
-    const lat = data.latitude || data.lat;
-    const lng = data.longitude || data.lng || data.lon;
-    if (!lat || !lng) { failCount++; if (failCount >= 3) setOffline(); return; }
-    failCount = 0;
-    setOnline();
-    updateMap(lat, lng);
-    fetchCity(lat, lng);
-    fetchWeather(lat, lng);
-  } catch(e) { failCount++; if (failCount >= 3) setOffline(); }
-}
+// ── RealtimeIRL WebSocket ──────────────────────────────────
 function setOnline()  {}
 function setOffline() {}
 
-// ── Reverse geocode ────────────────────────────────────────
+let ws = null;
+let wsReconnectTimer = null;
+
+function connectWS() {
+  if (ws) { try { ws.close(); } catch(e) {} }
+
+  ws = new WebSocket(`wss://pubsub.realtimeirl.com/sub/${RTIRL_KEY}`);
+
+  ws.onopen = () => {
+    console.log('WS conectado');
+    clearTimeout(wsReconnectTimer);
+  };
+
+  ws.onmessage = (evt) => {
+    try {
+      const data = JSON.parse(evt.data);
+      const lat = data.latitude || data.lat;
+      const lng = data.longitude || data.lng || data.lon;
+      if (!lat || !lng) return;
+      updateMap(lat, lng);
+      fetchCity(lat, lng);
+      fetchWeather(lat, lng);
+    } catch(e) {}
+  };
+
+  ws.onerror = () => scheduleReconnect();
+  ws.onclose = () => scheduleReconnect();
+}
+
+function scheduleReconnect() {
+  clearTimeout(wsReconnectTimer);
+  wsReconnectTimer = setTimeout(connectWS, 5000);
+}
+
+// ── Reverse geocode (Overpass + Nominatim) ─────────────────
 let lastCity = 0;
 async function fetchCity(lat, lng) {
   if (Date.now() - lastCity < 30000) return;
   lastCity = Date.now();
   try {
-    // Overpass: busca ruas num raio de 25m do ponto exacto — muito mais preciso que Nominatim
     const overpassQuery = `[out:json];way(around:25,${lat},${lng})[highway][name];out tags 1;`;
-    const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-
-    // Nominatim zoom=10 só para cidade (continua fiável a este nível)
     const [ovRes, cityRes] = await Promise.all([
-      fetch(overpassUrl).then(r=>r.json()),
+      fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`).then(r=>r.json()),
       fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`).then(r=>r.json())
     ]);
-
-    // Rua: primeiro resultado da Overpass (é a via mais próxima MESMO)
     const ways = ovRes.elements || [];
-    const road = (ways[0]?.tags?.['name:pt'] || ways[0]?.tags?.name || '');
-
-    // Cidade: Nominatim zoom=10
+    const road = ways[0]?.tags?.['name:pt'] || ways[0]?.tags?.name || '';
     const a2 = cityRes.address || {};
     const city = cityRes.name || a2.city || a2.town || a2.village || a2.municipality || a2.county || '';
-
     document.getElementById('city-name').textContent = road || city || 'Em rota...';
-
-    const zoneLabel = city || '--';
+    const zoneLabel = city || road || '--';
     document.getElementById('zoneVal').textContent =
-      zoneLabel.length > 20 ? zoneLabel.substring(0, 20) + '…' : zoneLabel;
+      zoneLabel.length > 13 ? zoneLabel.substring(0, 13) + '…' : zoneLabel;
   } catch(e) {}
 }
 
@@ -248,8 +241,7 @@ async function fetchWeather(lat, lng) {
 }
 
 // ── Init ───────────────────────────────────────────────────
-fetchLocation();
-setInterval(fetchLocation, 5000);
+connectWS();
 </script>
 </body>
 </html>
