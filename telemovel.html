@@ -2,202 +2,123 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Stream GPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesla Nav Widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background: #111214;
-    font-family: 'Inter', -apple-system, sans-serif;
-    color: #E8E9EA;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-    padding: 24px;
-  }
-  .logo {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    color: #8A8F99;
-    text-transform: uppercase;
-  }
-  .status-card {
-    width: 100%;
-    max-width: 360px;
-    background: #1A1C1F;
-    border-radius: 20px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    box-shadow: 0 4px 24px rgba(0,0,0,.5);
-  }
-  .status-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .dot {
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: #8A8F99;
-    flex-shrink: 0;
-    transition: background .3s;
-  }
-  .dot.active { background: #2ECC71; box-shadow: 0 0 8px rgba(46,204,113,.5); }
-  .dot.error  { background: #FF6B5B; }
-  .label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #8A8F99;
-    text-transform: uppercase;
-    letter-spacing: .8px;
-  }
-  .value {
-    font-size: 15px;
-    font-weight: 600;
-    color: #E8E9EA;
-    margin-left: auto;
-    text-align: right;
-  }
-  .btn {
-    width: 100%;
-    max-width: 360px;
-    padding: 18px;
-    border-radius: 14px;
-    border: none;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: .5px;
-    cursor: pointer;
-    transition: opacity .2s, transform .1s;
-  }
-  .btn:active { transform: scale(.97); opacity: .85; }
-  .btn-start { background: #2ECC71; color: #111214; }
-  .btn-stop  { background: #FF6B5B; color: #fff; display: none; }
-  .coords {
-    font-size: 11px;
-    color: #8A8F99;
-    text-align: center;
-    font-family: monospace;
-    min-height: 16px;
-  }
-  .counter {
-    font-size: 28px;
-    font-weight: 800;
-    color: #3B6CFF;
-    text-align: center;
-    letter-spacing: -1px;
-  }
-  .counter span { font-size: 13px; font-weight: 500; color: #8A8F99; margin-left: 4px; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background: transparent; font-family: 'Inter', sans-serif; }
+#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
+#map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; }
+.leaflet-tile { filter: invert(100%) hue-rotate(180deg) brightness(0.75) saturate(0.8) contrast(1.1) !important; }
+.leaflet-container { background:#111214 !important; }
+.leaflet-control-zoom, .leaflet-control-attribution { display:none !important; }
+#map::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px); pointer-events:none; z-index:500; }
+#map-fade { position:absolute; bottom:0; left:0; right:0; height:70px; background:linear-gradient(transparent,#111214); z-index:501; pointer-events:none; }
+#city-name { position:absolute; bottom:76px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:rgba(232,233,234,.75); text-transform:uppercase; letter-spacing:2.5px; z-index:502; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none; }
+#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); z-index:502; animation:gps-pulse 2s ease-in-out infinite; }
+#gps-dot.offline { background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); animation:none; }
+@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+.car-marker { width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 12px rgba(59,108,255,.8); }
+#bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
+.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
+.nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
+.nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
+.nav-value.temp { color:#3B6CFF; }
+.nav-value.time { font-size:34px; }
+.nav-value.zone { color:#F0AD4E; font-size:15px; letter-spacing:0; text-align:center; }
+.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
+.nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
 </style>
 </head>
 <body>
-
-<div class="logo">Stream GPS Sender</div>
-
-<div class="status-card">
-  <div class="status-row">
-    <div class="dot" id="dotGps"></div>
-    <span class="label">GPS</span>
-    <span class="value" id="gpsStatus">Inativo</span>
+<div id="nav-widget">
+  <div id="map">
+    <div id="map-fade"></div>
+    <div id="city-name">A localizar...</div>
+    <div id="gps-dot" class="offline"></div>
   </div>
-  <div class="status-row">
-    <div class="dot" id="dotFb"></div>
-    <span class="label">Firebase</span>
-    <span class="value" id="fbStatus">Aguarda</span>
+  <div id="bottom-bar">
+    <div class="nav-item">
+      <span class="nav-label">Temp</span>
+      <span class="nav-value temp" id="tempVal">--</span>
+      <span class="nav-unit">°C</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-value time" id="timeVal">--:--</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-label">Zona</span>
+      <span class="nav-value zone" id="zoneVal">--</span>
+    </div>
   </div>
-  <div class="status-row">
-    <div class="dot" id="dotSend" ></div>
-    <span class="label">Envios</span>
-    <div class="counter" id="sendCount">0<span>envios</span></div>
-  </div>
-  <div class="coords" id="coordsText">—</div>
 </div>
-
-<button class="btn btn-start" id="btnStart" onclick="startTracking()">▶ Iniciar Tracking</button>
-<button class="btn btn-stop"  id="btnStop"  onclick="stopTracking()">■ Parar</button>
-
 <script>
 const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
-let watchId = null;
-let sendCount = 0;
-let lastSend = 0;
+const map = L.map('map', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, keyboard:false, touchZoom:false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+map.setView([38.7169, -9.1395], 17);
+const markerIcon = L.divIcon({ className:'', html:'<div class="car-marker"></div>', iconSize:[20,20], iconAnchor:[10,10] });
+const marker = L.marker([38.7169, -9.1395], { icon:markerIcon }).addTo(map);
 
-function startTracking() {
-  if (!navigator.geolocation) {
-    alert('GPS não disponível neste dispositivo.');
-    return;
-  }
-  document.getElementById('btnStart').style.display = 'none';
-  document.getElementById('btnStop').style.display = 'block';
-  document.getElementById('gpsStatus').textContent = 'A obter...';
-
-  watchId = navigator.geolocation.watchPosition(
-    onPosition,
-    onError,
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-  );
-  setDot('dotGps', 'active');
+function updateClock() {
+  const now = new Date();
+  document.getElementById('timeVal').textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
 }
+setInterval(updateClock, 1000);
+updateClock();
 
-function stopTracking() {
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = null;
-  document.getElementById('btnStart').style.display = 'block';
-  document.getElementById('btnStop').style.display = 'none';
-  document.getElementById('gpsStatus').textContent = 'Inativo';
-  document.getElementById('fbStatus').textContent = 'Parado';
-  setDot('dotGps', '');
-  setDot('dotFb', '');
-  setDot('dotSend', '');
-}
-
-async function onPosition(pos) {
-  const now = Date.now();
-  if (now - lastSend < 5000) return; // envia de 5 em 5s
-  lastSend = now;
-
-  const { latitude, longitude, accuracy } = pos.coords;
-  document.getElementById('gpsStatus').textContent = `±${Math.round(accuracy)}m`;
-  document.getElementById('coordsText').textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-  setDot('dotGps', 'active');
-
+async function fetchLocation() {
   try {
-    const res = await fetch(FB_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat: latitude, lng: longitude, ts: now })
-    });
-    if (res.ok) {
-      sendCount++;
-      document.getElementById('sendCount').innerHTML = `${sendCount}<span>envios</span>`;
-      document.getElementById('fbStatus').textContent = 'OK ✓';
-      setDot('dotFb', 'active');
-      setDot('dotSend', 'active');
-    } else {
-      document.getElementById('fbStatus').textContent = 'Erro ' + res.status;
-      setDot('dotFb', 'error');
-    }
-  } catch(e) {
-    document.getElementById('fbStatus').textContent = 'Sem rede';
-    setDot('dotFb', 'error');
-  }
+    const res = await fetch(FB_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data || !data.lat) { setOffline(); return; }
+    if (Date.now() - (data.ts||0) > 30000) { setOffline(); return; }
+    setOnline();
+    const ll = [data.lat, data.lng];
+    marker.setLatLng(ll);
+    map.setView(ll, 17, { animate:true, duration:1.2 });
+    fetchCity(data.lat, data.lng);
+    fetchWeather(data.lat, data.lng);
+  } catch(e) { setOffline(); }
+}
+function setOnline()  { document.getElementById('gps-dot').className = ''; }
+function setOffline() { document.getElementById('gps-dot').className = 'offline'; }
+
+let lastCity = 0;
+async function fetchCity(lat, lng) {
+  if (Date.now() - lastCity < 30000) return;
+  lastCity = Date.now();
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json');
+    const d = await res.json();
+    const road = d.address?.road || '';
+    const suburb = d.address?.suburb || d.address?.neighbourhood || '';
+    const city = d.address?.city || d.address?.town || d.address?.village || '';
+    document.getElementById('city-name').textContent = road || suburb || city || 'Em rota...';
+    const zone = suburb || city || '--';
+    document.getElementById('zoneVal').textContent = zone.length > 10 ? zone.substring(0,10)+'...' : zone;
+  } catch(e) {}
 }
 
-function onError(err) {
-  document.getElementById('gpsStatus').textContent = 'Erro GPS';
-  setDot('dotGps', 'error');
+let lastWeather = 0;
+async function fetchWeather(lat, lng) {
+  if (Date.now() - lastWeather < 300000) return;
+  lastWeather = Date.now();
+  try {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current=temperature_2m&timezone=auto');
+    const d = await res.json();
+    document.getElementById('tempVal').textContent = Math.round(d.current?.temperature_2m ?? '--');
+  } catch(e) {}
 }
 
-function setDot(id, cls) {
-  const d = document.getElementById(id);
-  d.className = 'dot' + (cls ? ' ' + cls : '');
-}
+fetchLocation();
+setInterval(fetchLocation, 5000);
 </script>
 </body>
 </html>
