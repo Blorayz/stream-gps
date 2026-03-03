@@ -5,22 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tesla Nav Widget</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:transparent; font-family:'Inter',sans-serif; }
 #nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); }
-#map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; }
-.leaflet-container { background:#111214 !important; }
-.leaflet-control-zoom, .leaflet-control-attribution { display:none !important; }
-#map::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px); pointer-events:none; z-index:500; }
+#map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; overflow:hidden; }
+.map-bg { position:absolute; inset:0; background:radial-gradient(circle at 50% 50%, #1a2a4a 0%, #111214 70%); }
+.grid-lines { position:absolute; inset:0; background-image:linear-gradient(rgba(59,108,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(59,108,255,.1) 1px,transparent 1px); background-size:40px 40px; opacity:.5; }
 #map-fade { position:absolute; bottom:0; left:0; right:0; height:70px; background:linear-gradient(transparent,#111214); z-index:501; pointer-events:none; }
 #city-name { position:absolute; bottom:76px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:rgba(232,233,234,.75); text-transform:uppercase; letter-spacing:2.5px; z-index:502; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none; }
 #gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); z-index:502; }
 #gps-dot.online { background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); animation:gps-pulse 2s ease-in-out infinite; }
 @keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
-.car-marker { width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 12px rgba(59,108,255,.8); }
+.car-marker { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 20px rgba(59,108,255,.8); z-index:10; }
+.pulse-ring { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:40px; height:40px; border:2px solid rgba(59,108,255,.3); border-radius:50%; animation:pulse 2s ease-out infinite; z-index:5; }
+@keyframes pulse { 0%{transform:translate(-50%,-50%) scale(0.5);opacity:1} 100%{transform:translate(-50%,-50%) scale(2);opacity:0} }
 #bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
 .nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
 .nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
@@ -35,6 +34,10 @@ body { background:transparent; font-family:'Inter',sans-serif; }
 <body>
 <div id="nav-widget">
   <div id="map">
+    <div class="map-bg"></div>
+    <div class="grid-lines"></div>
+    <div class="pulse-ring"></div>
+    <div class="car-marker"></div>
     <div id="map-fade"></div>
     <div id="city-name">A localizar...</div>
     <div id="gps-dot"></div>
@@ -56,45 +59,21 @@ body { background:transparent; font-family:'Inter',sans-serif; }
     </div>
   </div>
 </div>
+
 <script>
 // ============================================
-// CONFIGURAÇÕES - ALTERA AQUI COM OS TEUS DADOS
+// CONFIGURAÇÃO PARA STREAMELEMENTS
 // ============================================
-const PULL_KEY   = '7o28sn2176qv2ij5';  // <-- SUBSTITUI COM O TEU PULL KEY DO REALTIMEIRL
-const MAPBOX_KEY = 'pk.eyJ1Ijoia2V2bW8zMTQiLCJhIjoiY2w0MW1qaTh3MG80dzNjcXRndmJ0a2JieiJ9.Y_xABmAqvD-qZeed8MabxQ';  // <-- SUBSTITUI COM A TUA API KEY DO MAPBOX
 
-// Inicializa mapa
-const map = L.map('map', { 
-  zoomControl: false, 
-  attributionControl: false, 
-  dragging: false, 
-  scrollWheelZoom: false, 
-  doubleClickZoom: false, 
-  keyboard: false, 
-  touchZoom: false 
-});
-
-L.tileLayer(
-  'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=' + MAPBOX_KEY,
-  { maxZoom: 19, tileSize: 512, zoomOffset: -1 }
-).addTo(map);
-
-// Posição inicial (Lisboa) até receber dados do telemóvel
-map.setView([38.7169, -9.1395], 17);
-
-// Marcador do carro
-const markerIcon = L.divIcon({ 
-  className: '', 
-  html: '<div class="car-marker"></div>', 
-  iconSize: [20, 20], 
-  iconAnchor: [10, 10] 
-});
-const marker = L.marker([38.7169, -9.1395], { icon: markerIcon }).addTo(map);
-
-// Controlo de rate limiting
-let lastCity = 0;
-let lastWeather = 0;
-let isFirstLocation = true;
+// Dados do RealtimeIRL (vão ser atualizados via API proxy ou manualmente)
+let config = {
+  pullKey: '{{pullKey}}' || '7o28sn2176qv2ij5',  // Podes definir no Custom Field
+  lat: 38.7169,
+  lng: -9.1395,
+  city: 'A localizar...',
+  temp: '--',
+  zone: '--'
+};
 
 // Relógio
 function updateClock() {
@@ -105,98 +84,155 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// Buscar localização do RealtimeIRL
+// Função para atualizar dados no widget
+function updateWidget(data) {
+  if (data.city) {
+    document.getElementById('city-name').textContent = data.city;
+    config.city = data.city;
+  }
+  if (data.zone) {
+    document.getElementById('zoneVal').textContent = data.zone.length > 12 ? data.zone.substring(0, 12) + '…' : data.zone;
+    config.zone = data.zone;
+  }
+  if (data.temp !== undefined) {
+    document.getElementById('tempVal').textContent = data.temp;
+    config.temp = data.temp;
+  }
+  if (data.lat && data.lng) {
+    config.lat = data.lat;
+    config.lng = data.lng;
+    document.getElementById('gps-dot').className = 'online';
+  }
+}
+
+// Tentar buscar via API (pode falhar no SE por CORS)
 async function fetchLocation() {
   try {
-    const res = await fetch('https://api.rtirl.com/location?key=' + PULL_KEY + '&t=' + Date.now());
+    // Usar proxy CORS se necessário, ou desativar se não funcionar
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
     
-    if (!res.ok) throw new Error('API error: ' + res.status);
+    const res = await fetch('https://api.rtirl.com/location?key=' + config.pullKey + '&t=' + Date.now(), {
+      signal: controller.signal,
+      mode: 'cors'
+    });
+    
+    clearTimeout(timeout);
+    
+    if (!res.ok) throw new Error('API error');
     const d = await res.json();
     
-    if (!d || d.latitude == null || d.longitude == null) { 
-      setOffline(); 
-      return; 
-    }
+    if (!d || d.latitude == null) return;
     
-    setOnline();
-    const ll = [d.latitude, d.longitude];
+    // Atualiza com dados recebidos
+    updateWidget({
+      lat: d.latitude,
+      lng: d.longitude
+    });
     
-    // Atualiza marcador
-    marker.setLatLng(ll);
-    
-    // No primeiro update, centra o mapa. Depois, apenas pan suave
-    if (isFirstLocation) {
-      map.setView(ll, 17, { animate: true, duration: 1 });
-      isFirstLocation = false;
-    } else {
-      map.panTo(ll, { animate: true, duration: 0.8 });
-    }
-    
-    // Busca cidade e temperatura (com rate limiting)
+    // Busca cidade (com timeout curto)
     fetchCity(d.latitude, d.longitude);
     fetchWeather(d.latitude, d.longitude);
     
-  } catch(e) { 
-    console.error('Erro ao buscar localização:', e);
-    setOffline(); 
+  } catch(e) {
+    console.log('API bloqueada ou indisponível, usando dados manuais');
+    // Mantém offline ou usa últimos dados conhecidos
   }
 }
 
-function setOnline() { 
-  document.getElementById('gps-dot').className = 'online'; 
-}
-
-function setOffline() { 
-  document.getElementById('gps-dot').className = ''; 
-}
-
-// Buscar nome da cidade/rua (máx 1x por 30 segundos)
 async function fetchCity(lat, lng) {
-  if (Date.now() - lastCity < 30000) return;
-  lastCity = Date.now();
-  
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
-    const d = await res.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
     
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeout);
+    const d = await res.json();
     const address = d.address || {};
-    const road = address.road || '';
-    const suburb = address.suburb || address.neighbourhood || '';
-    const city = address.city || address.town || address.village || '';
     
-    // Mostra rua, suburbio ou cidade
-    const displayLocation = road || suburb || city || 'Em rota...';
-    document.getElementById('city-name').textContent = displayLocation;
-    
-    // Zona (para o widget pequeno)
-    const zone = suburb || city || '--';
-    document.getElementById('zoneVal').textContent = zone.length > 12 ? zone.substring(0, 12) + '…' : zone;
+    updateWidget({
+      city: address.road || address.suburb || address.city || 'Em rota...',
+      zone: address.suburb || address.city || '--'
+    });
     
   } catch(e) {
-    console.error('Erro ao buscar cidade:', e);
+    console.log('Erro ao buscar cidade');
   }
 }
 
-// Buscar temperatura (máx 1x por 5 minutos)
 async function fetchWeather(lat, lng) {
-  if (Date.now() - lastWeather < 300000) return;
-  lastWeather = Date.now();
-  
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&timezone=auto`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&timezone=auto`, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeout);
     const d = await res.json();
     
-    const temp = d.current?.temperature_2m;
-    document.getElementById('tempVal').textContent = temp !== undefined ? Math.round(temp) : '--';
+    if (d.current?.temperature_2m !== undefined) {
+      updateWidget({ temp: Math.round(d.current.temperature_2m) });
+    }
     
   } catch(e) {
-    console.error('Erro ao buscar temperatura:', e);
+    console.log('Erro ao buscar temperatura');
   }
 }
 
-// Inicia e atualiza a cada 5 segundos
+// Inicializa
 fetchLocation();
-setInterval(fetchLocation, 5000);
+
+// Tenta atualizar a cada 10 segundos (mais conservador para SE)
+setInterval(fetchLocation, 10000);
+
+// ============================================
+// INTEGRAÇÃO COM STREAMELEMENTS
+// ============================================
+
+// Ouvir mensagens do chat (opcional - para atualizar via comando)
+window.addEventListener('onEventReceived', function(obj) {
+  if (obj.detail.listener === 'message') {
+    const data = obj.detail.event.data;
+    const message = data.text;
+    
+    // Comando !loc para atualizar manualmente
+    if (message.startsWith('!loc ') && data.tags.badges && (data.tags.badges.broadcaster || data.tags.badges.moderator)) {
+      const parts = message.replace('!loc ', '').split(',');
+      if (parts.length >= 2) {
+        updateWidget({
+          lat: parseFloat(parts[0]),
+          lng: parseFloat(parts[1]),
+          city: parts[2] || 'Local atualizado',
+          zone: parts[3] || '--'
+        });
+      }
+    }
+  }
+});
+
+// Ouvir alterações nos custom fields
+window.addEventListener('onWidgetLoad', function(obj) {
+  const fieldData = obj.detail.fieldData;
+  
+  if (fieldData.pullKey) config.pullKey = fieldData.pullKey;
+  if (fieldData.defaultCity) {
+    document.getElementById('city-name').textContent = fieldData.defaultCity;
+  }
+  if (fieldData.defaultZone) {
+    document.getElementById('zoneVal').textContent = fieldData.defaultZone;
+  }
+  if (fieldData.defaultTemp) {
+    document.getElementById('tempVal').textContent = fieldData.defaultTemp;
+  }
+  
+  // Tenta buscar imediatamente após load
+  setTimeout(fetchLocation, 1000);
+});
 </script>
 </body>
 </html>
