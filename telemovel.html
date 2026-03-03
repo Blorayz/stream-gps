@@ -2,237 +2,245 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tesla Nav Widget</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>GPS → Stream</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:transparent; font-family:'Inter',sans-serif; }
-#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); }
-#map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; overflow:hidden; }
-.map-bg { position:absolute; inset:0; background:radial-gradient(circle at 50% 50%, #1a2a4a 0%, #111214 70%); }
-.grid-lines { position:absolute; inset:0; background-image:linear-gradient(rgba(59,108,255,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(59,108,255,.1) 1px,transparent 1px); background-size:40px 40px; opacity:.5; }
-#map-fade { position:absolute; bottom:0; left:0; right:0; height:70px; background:linear-gradient(transparent,#111214); z-index:501; pointer-events:none; }
-#city-name { position:absolute; bottom:76px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:rgba(232,233,234,.75); text-transform:uppercase; letter-spacing:2.5px; z-index:502; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none; }
-#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); z-index:502; }
-#gps-dot.online { background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); animation:gps-pulse 2s ease-in-out infinite; }
-@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
-.car-marker { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 20px rgba(59,108,255,.8); z-index:10; }
-.pulse-ring { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:40px; height:40px; border:2px solid rgba(59,108,255,.3); border-radius:50%; animation:pulse 2s ease-out infinite; z-index:5; }
-@keyframes pulse { 0%{transform:translate(-50%,-50%) scale(0.5);opacity:1} 100%{transform:translate(-50%,-50%) scale(2);opacity:0} }
-#bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
-.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
-.nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
-.nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
-.nav-value.temp { color:#3B6CFF; }
-.nav-value.time { font-size:34px; }
-.nav-value.zone { color:#F0AD4E; font-size:15px; letter-spacing:0; text-align:center; }
-.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
-.nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
+html, body { height:100%; background:#0a0b0d; font-family:'Space Mono', monospace; color:#e8e9ea; }
+
+body {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:100vh; padding:24px;
+}
+
+.card {
+  width:100%; max-width:360px;
+  background:#111214;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:24px;
+  padding:32px 24px;
+  display:flex; flex-direction:column; align-items:center; gap:28px;
+}
+
+.logo {
+  font-size:11px; font-weight:700; letter-spacing:3px; color:#3B6CFF;
+  text-transform:uppercase;
+}
+
+.status-ring {
+  position:relative; width:120px; height:120px;
+  display:flex; align-items:center; justify-content:center;
+}
+.ring {
+  position:absolute; inset:0; border-radius:50%;
+  border:2px solid rgba(59,108,255,.15);
+}
+.ring-pulse {
+  position:absolute; inset:0; border-radius:50%;
+  border:2px solid #3B6CFF;
+  opacity:0; animation:none;
+}
+.ring-pulse.active { animation: ripple 2s ease-out infinite; }
+@keyframes ripple {
+  0% { transform:scale(1); opacity:.6; }
+  100% { transform:scale(1.5); opacity:0; }
+}
+.center-dot {
+  width:48px; height:48px; border-radius:50%;
+  background:#1a1c1f;
+  border:2px solid rgba(255,255,255,.1);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px;
+  transition: background .3s, border-color .3s;
+  position:relative; z-index:1;
+}
+.center-dot.sending { background:#0d1a2e; border-color:#3B6CFF; }
+.center-dot.error   { background:#1f0d0d; border-color:#FF6B5B; }
+
+.status-text {
+  font-size:11px; letter-spacing:2px; text-transform:uppercase;
+  color:#8A8F99; text-align:center; line-height:1.6;
+}
+.status-text span { display:block; }
+.status-text .main { font-size:13px; color:#e8e9ea; font-weight:700; margin-bottom:4px; }
+
+.coords-box {
+  width:100%; background:#0a0b0d;
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:14px; padding:14px 18px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.coord-row { display:flex; justify-content:space-between; align-items:center; }
+.coord-label { font-size:9px; letter-spacing:2px; color:#8A8F99; text-transform:uppercase; }
+.coord-val { font-size:12px; color:#3B6CFF; font-weight:700; }
+
+.btn {
+  width:100%; padding:16px;
+  border-radius:14px; border:none; cursor:pointer;
+  font-family:'Space Mono', monospace;
+  font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+  transition: all .2s;
+}
+.btn-start {
+  background:#3B6CFF; color:#fff;
+  box-shadow: 0 0 24px rgba(59,108,255,.3);
+}
+.btn-start:hover { background:#5585ff; }
+.btn-start:active { transform:scale(.98); }
+.btn-stop {
+  background:transparent; color:#FF6B5B;
+  border:1px solid rgba(255,107,91,.3);
+}
+.btn-stop:hover { background:rgba(255,107,91,.08); }
+
+.updates-log {
+  width:100%;
+  font-size:10px; color:#8A8F99; letter-spacing:.5px;
+  text-align:center; line-height:1.8;
+  min-height:20px;
+}
+.updates-log .ok { color:#2ECC71; }
+.updates-log .err { color:#FF6B5B; }
+
+.footer {
+  font-size:9px; color:rgba(138,143,153,.5); letter-spacing:1px;
+  text-align:center; text-transform:uppercase;
+}
 </style>
 </head>
 <body>
-<div id="nav-widget">
-  <div id="map">
-    <div class="map-bg"></div>
-    <div class="grid-lines"></div>
-    <div class="pulse-ring"></div>
-    <div class="car-marker"></div>
-    <div id="map-fade"></div>
-    <div id="city-name">A localizar...</div>
-    <div id="gps-dot"></div>
+
+<div class="card">
+  <div class="logo">⬡ Stream GPS</div>
+
+  <div class="status-ring">
+    <div class="ring"></div>
+    <div class="ring-pulse" id="ringPulse"></div>
+    <div class="center-dot" id="centerDot">📡</div>
   </div>
-  <div id="bottom-bar">
-    <div class="nav-item">
-      <span class="nav-label">Temp</span>
-      <span class="nav-value temp" id="tempVal">--</span>
-      <span class="nav-unit">°C</span>
+
+  <div class="status-text">
+    <span class="main" id="statusMain">Pronto</span>
+    <span id="statusSub">Carrega em Iniciar para começar</span>
+  </div>
+
+  <div class="coords-box">
+    <div class="coord-row">
+      <span class="coord-label">Latitude</span>
+      <span class="coord-val" id="latVal">--</span>
     </div>
-    <div class="nav-divider"></div>
-    <div class="nav-item">
-      <span class="nav-value time" id="timeVal">--:--</span>
+    <div class="coord-row">
+      <span class="coord-label">Longitude</span>
+      <span class="coord-val" id="lngVal">--</span>
     </div>
-    <div class="nav-divider"></div>
-    <div class="nav-item">
-      <span class="nav-label">Zona</span>
-      <span class="nav-value zone" id="zoneVal">--</span>
+    <div class="coord-row">
+      <span class="coord-label">Precisão</span>
+      <span class="coord-val" id="accVal">--</span>
     </div>
   </div>
+
+  <button class="btn btn-start" id="mainBtn" onclick="toggleTracking()">▶ Iniciar</button>
+
+  <div class="updates-log" id="logMsg">Aguardando...</div>
+
+  <div class="footer">Envia GPS → Firebase → Widget</div>
 </div>
 
 <script>
-// ============================================
-// CONFIGURAÇÃO PARA STREAMELEMENTS
-// ============================================
+// ══════════════════════════════════════════
+// 🔧 MUDA AQUI para o teu Firebase URL
+const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
+// ══════════════════════════════════════════
 
-// Dados do RealtimeIRL (vão ser atualizados via API proxy ou manualmente)
-let config = {
-  pullKey: '{{pullKey}}' || '7o28sn2176qv2ij5',  // Podes definir no Custom Field
-  lat: 38.7169,
-  lng: -9.1395,
-  city: 'A localizar...',
-  temp: '--',
-  zone: '--'
-};
+let watchId = null;
+let isTracking = false;
+let sendCount = 0;
 
-// Relógio
-function updateClock() {
-  const n = new Date();
-  document.getElementById('timeVal').textContent =
-    String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-// Função para atualizar dados no widget
-function updateWidget(data) {
-  if (data.city) {
-    document.getElementById('city-name').textContent = data.city;
-    config.city = data.city;
-  }
-  if (data.zone) {
-    document.getElementById('zoneVal').textContent = data.zone.length > 12 ? data.zone.substring(0, 12) + '…' : data.zone;
-    config.zone = data.zone;
-  }
-  if (data.temp !== undefined) {
-    document.getElementById('tempVal').textContent = data.temp;
-    config.temp = data.temp;
-  }
-  if (data.lat && data.lng) {
-    config.lat = data.lat;
-    config.lng = data.lng;
-    document.getElementById('gps-dot').className = 'online';
-  }
+function toggleTracking() {
+  if (!isTracking) startTracking();
+  else stopTracking();
 }
 
-// Tentar buscar via API (pode falhar no SE por CORS)
-async function fetchLocation() {
+function startTracking() {
+  if (!navigator.geolocation) {
+    setStatus('error', 'GPS não suportado', 'Usa um browser moderno');
+    return;
+  }
+
+  setStatus('waiting', 'A obter GPS...', 'Aceita a permissão de localização');
+  document.getElementById('mainBtn').textContent = '⏹ Parar';
+  document.getElementById('mainBtn').className = 'btn btn-stop';
+  isTracking = true;
+
+  watchId = navigator.geolocation.watchPosition(
+    onPosition,
+    onError,
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+  );
+}
+
+function stopTracking() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  isTracking = false;
+  setStatus('idle', 'Parado', 'Carrega em Iniciar para recomeçar');
+  document.getElementById('mainBtn').textContent = '▶ Iniciar';
+  document.getElementById('mainBtn').className = 'btn btn-start';
+  document.getElementById('ringPulse').classList.remove('active');
+  document.getElementById('centerDot').className = 'center-dot';
+  document.getElementById('centerDot').textContent = '📡';
+}
+
+async function onPosition(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+  document.getElementById('latVal').textContent = lat.toFixed(6);
+  document.getElementById('lngVal').textContent = lng.toFixed(6);
+  document.getElementById('accVal').textContent = Math.round(accuracy) + 'm';
+
+  setStatus('sending', 'A enviar...', 'Localização activa');
+  document.getElementById('ringPulse').classList.add('active');
+  document.getElementById('centerDot').className = 'center-dot sending';
+  document.getElementById('centerDot').textContent = '🛰️';
+
   try {
-    // Usar proxy CORS se necessário, ou desativar se não funcionar
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    
-    const res = await fetch('https://api.rtirl.com/location?key=' + config.pullKey + '&t=' + Date.now(), {
-      signal: controller.signal,
-      mode: 'cors'
+    const payload = { lat, lng, accuracy, ts: Date.now() };
+    const res = await fetch(FB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-    
-    clearTimeout(timeout);
-    
-    if (!res.ok) throw new Error('API error');
-    const d = await res.json();
-    
-    if (!d || d.latitude == null) return;
-    
-    // Atualiza com dados recebidos
-    updateWidget({
-      lat: d.latitude,
-      lng: d.longitude
-    });
-    
-    // Busca cidade (com timeout curto)
-    fetchCity(d.latitude, d.longitude);
-    fetchWeather(d.latitude, d.longitude);
-    
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    sendCount++;
+    setLog(`<span class="ok">✓ Enviado #${sendCount} — ${new Date().toLocaleTimeString('pt')}</span>`);
   } catch(e) {
-    console.log('API bloqueada ou indisponível, usando dados manuais');
-    // Mantém offline ou usa últimos dados conhecidos
+    setLog(`<span class="err">✗ Erro ao enviar: ${e.message}</span>`);
+    document.getElementById('centerDot').className = 'center-dot error';
+    document.getElementById('centerDot').textContent = '⚠️';
   }
 }
 
-async function fetchCity(lat, lng) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeout);
-    const d = await res.json();
-    const address = d.address || {};
-    
-    updateWidget({
-      city: address.road || address.suburb || address.city || 'Em rota...',
-      zone: address.suburb || address.city || '--'
-    });
-    
-  } catch(e) {
-    console.log('Erro ao buscar cidade');
-  }
+function onError(err) {
+  const msgs = {
+    1: 'Permissão negada. Activa o GPS nas definições.',
+    2: 'GPS indisponível.',
+    3: 'Timeout a obter localização.'
+  };
+  setStatus('error', 'Erro GPS', msgs[err.code] || 'Erro desconhecido');
+  document.getElementById('centerDot').className = 'center-dot error';
+  document.getElementById('centerDot').textContent = '⚠️';
 }
 
-async function fetchWeather(lat, lng) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&timezone=auto`, {
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeout);
-    const d = await res.json();
-    
-    if (d.current?.temperature_2m !== undefined) {
-      updateWidget({ temp: Math.round(d.current.temperature_2m) });
-    }
-    
-  } catch(e) {
-    console.log('Erro ao buscar temperatura');
-  }
+function setStatus(type, main, sub) {
+  document.getElementById('statusMain').textContent = main;
+  document.getElementById('statusSub').textContent = sub;
 }
 
-// Inicializa
-fetchLocation();
-
-// Tenta atualizar a cada 10 segundos (mais conservador para SE)
-setInterval(fetchLocation, 10000);
-
-// ============================================
-// INTEGRAÇÃO COM STREAMELEMENTS
-// ============================================
-
-// Ouvir mensagens do chat (opcional - para atualizar via comando)
-window.addEventListener('onEventReceived', function(obj) {
-  if (obj.detail.listener === 'message') {
-    const data = obj.detail.event.data;
-    const message = data.text;
-    
-    // Comando !loc para atualizar manualmente
-    if (message.startsWith('!loc ') && data.tags.badges && (data.tags.badges.broadcaster || data.tags.badges.moderator)) {
-      const parts = message.replace('!loc ', '').split(',');
-      if (parts.length >= 2) {
-        updateWidget({
-          lat: parseFloat(parts[0]),
-          lng: parseFloat(parts[1]),
-          city: parts[2] || 'Local atualizado',
-          zone: parts[3] || '--'
-        });
-      }
-    }
-  }
-});
-
-// Ouvir alterações nos custom fields
-window.addEventListener('onWidgetLoad', function(obj) {
-  const fieldData = obj.detail.fieldData;
-  
-  if (fieldData.pullKey) config.pullKey = fieldData.pullKey;
-  if (fieldData.defaultCity) {
-    document.getElementById('city-name').textContent = fieldData.defaultCity;
-  }
-  if (fieldData.defaultZone) {
-    document.getElementById('zoneVal').textContent = fieldData.defaultZone;
-  }
-  if (fieldData.defaultTemp) {
-    document.getElementById('tempVal').textContent = fieldData.defaultTemp;
-  }
-  
-  // Tenta buscar imediatamente após load
-  setTimeout(fetchLocation, 1000);
-});
+function setLog(html) {
+  document.getElementById('logMsg').innerHTML = html;
+}
 </script>
 </body>
 </html>
