@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Stream GPS</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #111214;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #E8E9EA;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 24px;
+  }
+  .logo {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #8A8F99;
+    text-transform: uppercase;
+  }
+  .status-card {
+    width: 100%;
+    max-width: 360px;
+    background: #1A1C1F;
+    border-radius: 20px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.5);
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #8A8F99;
+    flex-shrink: 0;
+    transition: background .3s;
+  }
+  .dot.active { background: #2ECC71; box-shadow: 0 0 8px rgba(46,204,113,.5); }
+  .dot.error  { background: #FF6B5B; }
+  .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #8A8F99;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+  }
+  .value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #E8E9EA;
+    margin-left: auto;
+    text-align: right;
+  }
+  .btn {
+    width: 100%;
+    max-width: 360px;
+    padding: 18px;
+    border-radius: 14px;
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+  }
+  .btn:active { transform: scale(.97); opacity: .85; }
+  .btn-start { background: #2ECC71; color: #111214; }
+  .btn-stop  { background: #FF6B5B; color: #fff; display: none; }
+  .coords {
+    font-size: 11px;
+    color: #8A8F99;
+    text-align: center;
+    font-family: monospace;
+    min-height: 16px;
+  }
+  .counter {
+    font-size: 28px;
+    font-weight: 800;
+    color: #3B6CFF;
+    text-align: center;
+    letter-spacing: -1px;
+  }
+  .counter span { font-size: 13px; font-weight: 500; color: #8A8F99; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div class="logo">Stream GPS Sender</div>
+
+<div class="status-card">
+  <div class="status-row">
+    <div class="dot" id="dotGps"></div>
+    <span class="label">GPS</span>
+    <span class="value" id="gpsStatus">Inativo</span>
+  </div>
+  <div class="status-row">
+    <div class="dot" id="dotFb"></div>
+    <span class="label">Firebase</span>
+    <span class="value" id="fbStatus">Aguarda</span>
+  </div>
+  <div class="status-row">
+    <div class="dot" id="dotSend" ></div>
+    <span class="label">Envios</span>
+    <div class="counter" id="sendCount">0<span>envios</span></div>
+  </div>
+  <div class="coords" id="coordsText">—</div>
+</div>
+
+<button class="btn btn-start" id="btnStart" onclick="startTracking()">▶ Iniciar Tracking</button>
+<button class="btn btn-stop"  id="btnStop"  onclick="stopTracking()">■ Parar</button>
+
+<script>
+const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
+let watchId = null;
+let sendCount = 0;
+let lastSend = 0;
+
+function startTracking() {
+  if (!navigator.geolocation) {
+    alert('GPS não disponível neste dispositivo.');
+    return;
+  }
+  document.getElementById('btnStart').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'block';
+  document.getElementById('gpsStatus').textContent = 'A obter...';
+
+  watchId = navigator.geolocation.watchPosition(
+    onPosition,
+    onError,
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+  setDot('dotGps', 'active');
+}
+
+function stopTracking() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  document.getElementById('btnStart').style.display = 'block';
+  document.getElementById('btnStop').style.display = 'none';
+  document.getElementById('gpsStatus').textContent = 'Inativo';
+  document.getElementById('fbStatus').textContent = 'Parado';
+  setDot('dotGps', '');
+  setDot('dotFb', '');
+  setDot('dotSend', '');
+}
+
+async function onPosition(pos) {
+  const now = Date.now();
+  if (now - lastSend < 5000) return; // envia de 5 em 5s
+  lastSend = now;
+
+  const { latitude, longitude, accuracy } = pos.coords;
+  document.getElementById('gpsStatus').textContent = `±${Math.round(accuracy)}m`;
+  document.getElementById('coordsText').textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  setDot('dotGps', 'active');
+
+  try {
+    const res = await fetch(FB_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat: latitude, lng: longitude, ts: now })
+    });
+    if (res.ok) {
+      sendCount++;
+      document.getElementById('sendCount').innerHTML = `${sendCount}<span>envios</span>`;
+      document.getElementById('fbStatus').textContent = 'OK ✓';
+      setDot('dotFb', 'active');
+      setDot('dotSend', 'active');
+    } else {
+      document.getElementById('fbStatus').textContent = 'Erro ' + res.status;
+      setDot('dotFb', 'error');
+    }
+  } catch(e) {
+    document.getElementById('fbStatus').textContent = 'Sem rede';
+    setDot('dotFb', 'error');
+  }
+}
+
+function onError(err) {
+  document.getElementById('gpsStatus').textContent = 'Erro GPS';
+  setDot('dotGps', 'error');
+}
+
+function setDot(id, cls) {
+  const d = document.getElementById(id);
+  d.className = 'dot' + (cls ? ' ' + cls : '');
+}
+</script>
+</body>
+</html>
