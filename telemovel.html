@@ -3,232 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tesla Nav Widget</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>Tracker GPS - Tesla Nav</title>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background: transparent; font-family: 'Inter', sans-serif; }
-#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
-
-/* ── MAP AREA ── */
-#map { width:400px; height:230px; position:relative; background:#1a1c1f; overflow:hidden; }
-
-/* 3x3 grid of tiles */
-#tile-grid {
-  position:absolute;
-  display:grid;
-  grid-template-columns: repeat(3,256px);
-  grid-template-rows: repeat(3,256px);
-  top:0; left:0;
-  transition: transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
-  image-rendering: auto;
-}
-#tile-grid img {
-  width:256px; height:256px; display:block;
-  filter: invert(100%) hue-rotate(180deg) brightness(0.75) saturate(0.8) contrast(1.1);
-  pointer-events:none;
-}
-
-/* Car marker – centred in #map */
-#car-marker {
-  position:absolute;
-  width:18px; height:18px;
-  background:#3B6CFF;
-  border-radius:50%;
-  border:3px solid #E8E9EA;
-  box-shadow:0 0 14px rgba(59,108,255,.9);
-  top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  z-index:10;
-  pointer-events:none;
-}
-
-#map::after {
-  content:'';
-  position:absolute; inset:0;
-  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px);
-  pointer-events:none; z-index:11;
-}
-#map-fade {
-  position:absolute; bottom:0; left:0; right:0; height:70px;
-  background:linear-gradient(transparent,#111214);
-  z-index:12; pointer-events:none;
-}
-#city-name {
-  position:absolute; bottom:76px; left:50%; transform:translateX(-50%);
-  font-size:10px; font-weight:700; color:rgba(232,233,234,.75);
-  text-transform:uppercase; letter-spacing:2.5px; z-index:13;
-  white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none;
-}
-#gps-dot {
-  position:absolute; top:12px; right:12px;
-  width:9px; height:9px; border-radius:50%;
-  background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7);
-  z-index:13; animation:gps-pulse 2s ease-in-out infinite;
-}
-#gps-dot.offline { background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); animation:none; }
-@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
-
-/* ── BOTTOM BAR ── */
-#bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
-.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
-.nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
-.nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
-.nav-value.temp { color:#3B6CFF; }
-.nav-value.time { font-size:34px; }
-.nav-value.zone { color:#F0AD4E; font-size:12px; letter-spacing:0; text-align:center; }
-.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
-.nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
-#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); z-index:502; animation:gps-pulse 2s ease-in-out infinite; }
-@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+body { font-family: system-ui; background: #111; color: #fff; padding: 20px; text-align: center; }
+.status { padding: 20px; border-radius: 12px; margin: 20px 0; }
+.online { background: #2ECC71; }
+.offline { background: #FF6B5B; }
+button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 8px; background: #3B6CFF; color: white; cursor: pointer; }
 </style>
 </head>
 <body>
-<div id="nav-widget">
-  <div id="map">
-    <div id="tile-grid"></div>
-    <div id="car-marker"></div>
-    <div id="gps-dot"></div>
-    <div id="map-fade"></div>
-    <div id="city-name">A localizar...</div>
-    
-  </div>
-  <div id="bottom-bar">
-    <div class="nav-item">
-      <span class="nav-label">Temp</span>
-      <span class="nav-value temp" id="tempVal">--</span>
-      <span class="nav-unit">°C</span>
-    </div>
-    <div class="nav-divider"></div>
-    <div class="nav-item">
-      <span class="nav-value time" id="timeVal">--:--</span>
-    </div>
-    <div class="nav-divider"></div>
-    <div class="nav-item">
-      <span class="nav-label">Zona</span>
-      <span class="nav-value zone" id="zoneVal">--</span>
-    </div>
-  </div>
-</div>
+<h2>🚗 Tesla GPS Tracker</h2>
+<div id="status" class="status offline">Aguardando GPS...</div>
+<button onclick="startTracking()">Iniciar Partilha</button>
+<p style="color:#888; font-size:12px;">Mantém esta página aberta</p>
 
 <script>
-const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location/current.json';
-const ZOOM = 17;
-const TILE_SIZE = 256;
-const MAP_W = 400;
-const MAP_H = 230;
+const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
+let watchId;
 
-// ── Tile math ──────────────────────────────────────────────
-function latLngToTile(lat, lng, z) {
-  const n = Math.pow(2, z);
-  const xf = (lng + 180) / 360 * n;
-  const yf = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
-  return { xf, yf, xtile: Math.floor(xf), ytile: Math.floor(yf) };
-}
-
-let currentTileX = null, currentTileY = null;
-const grid = document.getElementById('tile-grid');
-
-function buildGrid(xtile, ytile) {
-  if (xtile === currentTileX && ytile === currentTileY) return;
-  currentTileX = xtile; currentTileY = ytile;
-  grid.innerHTML = '';
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const tx = xtile + dx, ty = ytile + dy;
-      const s = ['a','b','c'][(Math.abs(tx + ty)) % 3];
-      const img = document.createElement('img');
-      img.src = `https://${s}.tile.openstreetmap.org/${ZOOM}/${tx}/${ty}.png`;
-      img.loading = 'eager';
-      grid.appendChild(img);
-    }
+function startTracking() {
+  if (!navigator.geolocation) {
+    alert('GPS não suportado neste dispositivo');
+    return;
   }
+  
+  document.getElementById('status').textContent = 'A procurar sinal GPS...';
+  
+  watchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      const data = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        ts: Date.now()
+      };
+      
+      // Envia para Firebase
+      await fetch(FB_URL, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      });
+      
+      document.getElementById('status').className = 'status online';
+      document.getElementById('status').textContent = 
+        `✅ Online | ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
+    },
+    (err) => {
+      document.getElementById('status').className = 'status offline';
+      document.getElementById('status').textContent = '❌ Erro: ' + err.message;
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
 }
 
-function positionGrid(xf, yf) {
-  const fracX = xf - Math.floor(xf);
-  const fracY = yf - Math.floor(yf);
-  const ox = MAP_W / 2 - (TILE_SIZE + fracX * TILE_SIZE);
-  const oy = MAP_H / 2 - (TILE_SIZE + fracY * TILE_SIZE);
-  grid.style.transform = `translate(${ox}px, ${oy}px)`;
-}
-
-function updateMap(lat, lng) {
-  const { xf, yf, xtile, ytile } = latLngToTile(lat, lng, ZOOM);
-  buildGrid(xtile, ytile);
-  positionGrid(xf, yf);
-}
-
-// ── Clock ──────────────────────────────────────────────────
-function updateClock() {
-  const now = new Date();
-  document.getElementById('timeVal').textContent =
-    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-// ── Firebase ───────────────────────────────────────────────
-function setOnline()  {}
-function setOffline() {}
-
-let failCount = 0;
-async function fetchLocation() {
-  try {
-    const res = await fetch(FB_URL + '?t=' + Date.now());
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    if (!data || !data.lat) { failCount++; if (failCount >= 3) setOffline(); return; }
-    const lat = data.lat;
-    const lng = data.lng || data.lon;
-    const ts = data.ts || (data.tst ? data.tst * 1000 : 0);
-    if (!lat || !lng) { failCount++; if (failCount >= 3) setOffline(); return; }
-    if (Date.now() - ts > 60000) { failCount++; if (failCount >= 3) setOffline(); return; }
-    failCount = 0;
-    setOnline();
-    updateMap(lat, lng);
-    fetchCity(lat, lng);
-    fetchWeather(lat, lng);
-  } catch(e) { failCount++; if (failCount >= 3) setOffline(); }
-}
-
-// ── Reverse geocode ────────────────────────────────────────
-let lastCity = 0;
-async function fetchCity(lat, lng) {
-  if (Date.now() - lastCity < 30000) return;
-  lastCity = Date.now();
-  try {
-    const overpassQuery = `[out:json];way(around:25,${lat},${lng})[highway][name];out tags 1;`;
-    const [ovRes, cityRes] = await Promise.all([
-      fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`).then(r=>r.json()),
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`).then(r=>r.json())
-    ]);
-    const ways = ovRes.elements || [];
-    const road = ways[0]?.tags?.['name:pt'] || ways[0]?.tags?.name || '';
-    const a2 = cityRes.address || {};
-    const city = cityRes.name || a2.city || a2.town || a2.village || a2.municipality || a2.county || '';
-    document.getElementById('city-name').textContent = road || city || 'Em rota...';
-    const zoneLabel = city || road || '--';
-    document.getElementById('zoneVal').textContent =
-      zoneLabel.length > 13 ? zoneLabel.substring(0, 13) + '…' : zoneLabel;
-  } catch(e) {}
-}
-
-// ── Weather ────────────────────────────────────────────────
-let lastWeather = 0;
-async function fetchWeather(lat, lng) {
-  if (Date.now() - lastWeather < 300000) return;
-  lastWeather = Date.now();
-  try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&timezone=auto`);
-    const d = await res.json();
-    document.getElementById('tempVal').textContent = Math.round(d.current?.temperature_2m ?? '--');
-  } catch(e) {}
-}
-
-// ── Init ───────────────────────────────────────────────────
-fetchLocation();
-setInterval(fetchLocation, 5000);
+// Para quando fechas a página
+window.onbeforeunload = () => {
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+};
 </script>
 </body>
 </html>
