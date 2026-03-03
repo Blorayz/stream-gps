@@ -1,3 +1,6 @@
+
+
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -112,6 +115,9 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 </div>
 
 <script>
+  fetch('https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json')
+  .then(r=>r.json())
+  .then(d=>{ document.body.innerHTML = '<pre>'+JSON.stringify(d,null,2)+'</pre>'; });
 const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
 const ZOOM = 17;
 const TILE_SIZE = 256;
