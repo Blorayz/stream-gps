@@ -144,7 +144,7 @@ async function fetchCity(lat, lng) {
     const suburb  = d.address?.suburb || d.address?.neighbourhood || '';
     const city    = d.address?.city || d.address?.town || d.address?.village || '';
     document.getElementById('city-name').textContent = road || suburb || city || 'Em rota...';
-    const zone = suburb || city || '--';
+    const zone = city || suburb || '--';
     document.getElementById('zoneVal').textContent = zone.length > 10 ? zone.substring(0,10)+'…' : zone;
   } catch(e) {}
 }
