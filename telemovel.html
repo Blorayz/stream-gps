@@ -3,63 +3,189 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tracker GPS - Tesla Nav</title>
+<title>Tesla Nav Widget</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-body { font-family: system-ui; background: #111; color: #fff; padding: 20px; text-align: center; }
-.status { padding: 20px; border-radius: 12px; margin: 20px 0; }
-.online { background: #2ECC71; }
-.offline { background: #FF6B5B; }
-button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 8px; background: #3B6CFF; color: white; cursor: pointer; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background: transparent; font-family: 'Inter', sans-serif; }
+#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
+#map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; }
+.leaflet-tile { filter: invert(100%) hue-rotate(180deg) brightness(0.75) saturate(0.8) contrast(1.1) !important; }
+.leaflet-container { background:#111214 !important; }
+.leaflet-control-zoom, .leaflet-control-attribution { display:none !important; }
+#map::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px); pointer-events:none; z-index:500; }
+#map-fade { position:absolute; bottom:0; left:0; right:0; height:70px; background:linear-gradient(transparent,#111214); z-index:501; pointer-events:none; }
+#city-name { position:absolute; bottom:76px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:rgba(232,233,234,.75); text-transform:uppercase; letter-spacing:2.5px; z-index:502; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none; }
+#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); z-index:502; animation:gps-pulse 2s ease-in-out infinite; }
+#gps-dot.offline { background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); animation:none; }
+@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+.car-marker { width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 12px rgba(59,108,255,.8); }
+
+/* Permission overlay */
+#perm-overlay { position:absolute; inset:0; background:rgba(17,18,20,.95); z-index:600; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border-radius:20px; }
+#perm-overlay.hidden { display:none; }
+#perm-overlay svg { opacity:.6; }
+#perm-overlay p { font-size:12px; color:#8A8F99; text-align:center; max-width:220px; line-height:1.6; }
+#perm-btn { background:#3B6CFF; color:#fff; border:none; border-radius:10px; padding:10px 24px; font-size:13px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; letter-spacing:.3px; }
+#perm-btn:active { background:#2a55d4; }
+
+#bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
+.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
+.nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
+.nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
+.nav-value.temp { color:#3B6CFF; }
+.nav-value.time { font-size:34px; }
+.nav-value.zone { color:#F0AD4E; font-size:15px; letter-spacing:0; text-align:center; }
+.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
+.nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
 </style>
 </head>
 <body>
-<h2>🚗 Tesla GPS Tracker</h2>
-<div id="status" class="status offline">Aguardando GPS...</div>
-<button onclick="startTracking()">Iniciar Partilha</button>
-<p style="color:#888; font-size:12px;">Mantém esta página aberta</p>
+<div id="nav-widget">
+  <div id="map">
+    <!-- Permission overlay -->
+    <div id="perm-overlay">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8E9EA" stroke-width="1.5">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+        <circle cx="12" cy="9" r="2.5"/>
+      </svg>
+      <p>Permite o acesso à localização para ativar o mapa em tempo real</p>
+      <button id="perm-btn">Ativar GPS</button>
+    </div>
 
+    <div id="map-fade"></div>
+    <div id="city-name">A localizar...</div>
+    <div id="gps-dot" class="offline"></div>
+  </div>
+  <div id="bottom-bar">
+    <div class="nav-item">
+      <span class="nav-label">Temp</span>
+      <span class="nav-value temp" id="tempVal">--</span>
+      <span class="nav-unit">°C</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-value time" id="timeVal">--:--</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item">
+      <span class="nav-label">Zona</span>
+      <span class="nav-value zone" id="zoneVal">--</span>
+    </div>
+  </div>
+</div>
 <script>
-const FB_URL = 'https://stream-overlay-95750-default-rtdb.firebaseio.com/location.json';
-let watchId;
+// --- Map setup ---
+const map = L.map('map', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, keyboard:false, touchZoom:false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+map.setView([38.7169, -9.1395], 16);
+const markerIcon = L.divIcon({ className:'', html:'<div class="car-marker"></div>', iconSize:[20,20], iconAnchor:[10,10] });
+const marker = L.marker([38.7169, -9.1395], { icon:markerIcon }).addTo(map);
 
-function startTracking() {
-  if (!navigator.geolocation) {
-    alert('GPS não suportado neste dispositivo');
+// --- Clock ---
+function updateClock() {
+  const now = new Date();
+  document.getElementById('timeVal').textContent =
+    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// --- GPS via browser ---
+let watchId = null;
+let lastCity = 0;
+let lastWeather = 0;
+
+function startGPS() {
+  if (!('geolocation' in navigator)) {
+    document.getElementById('city-name').textContent = 'GPS não suportado';
     return;
   }
-  
-  document.getElementById('status').textContent = 'A procurar sinal GPS...';
-  
+
+  // Hide permission overlay
+  document.getElementById('perm-overlay').classList.add('hidden');
+
   watchId = navigator.geolocation.watchPosition(
-    async (pos) => {
-      const data = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        ts: Date.now()
-      };
-      
-      // Envia para Firebase
-      await fetch(FB_URL, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
-      
-      document.getElementById('status').className = 'status online';
-      document.getElementById('status').textContent = 
-        `✅ Online | ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
-    },
-    (err) => {
-      document.getElementById('status').className = 'status offline';
-      document.getElementById('status').textContent = '❌ Erro: ' + err.message;
-    },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    onPosition,
+    onError,
+    {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000
+    }
   );
 }
 
-// Para quando fechas a página
-window.onbeforeunload = () => {
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-};
+function onPosition(pos) {
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+
+  // Update dot
+  document.getElementById('gps-dot').className = '';
+
+  // Move marker + map
+  const ll = [lat, lng];
+  marker.setLatLng(ll);
+  map.setView(ll, 19, { animate:true, duration:1.2 });
+
+  // City name + zone (throttled 30s)
+  fetchCity(lat, lng);
+
+  // Weather (throttled 5min)
+  fetchWeather(lat, lng);
+}
+
+function onError(err) {
+  document.getElementById('gps-dot').className = 'offline';
+  const msgs = {
+    1: 'Permissão negada',
+    2: 'Posição indisponível',
+    3: 'Timeout GPS'
+  };
+  document.getElementById('city-name').textContent = msgs[err.code] || 'Erro GPS';
+}
+
+// --- Permission button ---
+document.getElementById('perm-btn').addEventListener('click', startGPS);
+
+// Try auto-start (works if permission was already granted)
+navigator.permissions && navigator.permissions.query({ name:'geolocation' }).then(result => {
+  if (result.state === 'granted') startGPS();
+});
+
+// --- Nominatim reverse geocode ---
+async function fetchCity(lat, lng) {
+  if (Date.now() - lastCity < 30000) return;
+  lastCity = Date.now();
+  try {
+    const res = await fetch(
+      'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json'
+    );
+    const d = await res.json();
+    const road    = d.address?.road || '';
+    const suburb  = d.address?.suburb || d.address?.neighbourhood || '';
+    const city    = d.address?.city || d.address?.town || d.address?.village || '';
+    document.getElementById('city-name').textContent = road || suburb || city || 'Em rota...';
+    const zone = suburb || city || '--';
+    document.getElementById('zoneVal').textContent = zone.length > 10 ? zone.substring(0,10)+'…' : zone;
+  } catch(e) {}
+}
+
+// --- Open-Meteo weather ---
+async function fetchWeather(lat, lng) {
+  if (Date.now() - lastWeather < 300000) return;
+  lastWeather = Date.now();
+  try {
+    const res = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng +
+      '&current=temperature_2m&timezone=auto'
+    );
+    const d = await res.json();
+    document.getElementById('tempVal').textContent = Math.round(d.current?.temperature_2m ?? '--');
+  } catch(e) {}
+}
 </script>
 </body>
 </html>
