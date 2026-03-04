@@ -18,9 +18,7 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 #map::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.06) 3px,rgba(0,0,0,.06) 4px); pointer-events:none; z-index:500; }
 #map-fade { position:absolute; bottom:0; left:0; right:0; height:70px; background:linear-gradient(transparent,#111214); z-index:501; pointer-events:none; }
 #city-name { position:absolute; bottom:76px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:rgba(232,233,234,.75); text-transform:uppercase; letter-spacing:2.5px; z-index:502; white-space:nowrap; text-shadow:0 1px 6px rgba(0,0,0,.9); pointer-events:none; }
-#gps-dot { position:absolute; top:12px; right:12px; width:9px; height:9px; border-radius:50%; background:#2ECC71; box-shadow:0 0 8px rgba(46,204,113,.7); z-index:502; animation:gps-pulse 2s ease-in-out infinite; }
-#gps-dot.offline { background:#FF6B5B; box-shadow:0 0 8px rgba(255,107,91,.7); animation:none; }
-@keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+
 .car-marker { width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 12px rgba(59,108,255,.8); }
 
 
@@ -42,7 +40,7 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
   <div id="map">
     <div id="map-fade"></div>
     <div id="city-name">A localizar...</div>
-    <div id="gps-dot" class="offline"></div>
+
   </div>
   <div id="bottom-bar">
     <div class="nav-item">
@@ -104,8 +102,7 @@ function onPosition(pos) {
   const lat = pos.coords.latitude;
   const lng = pos.coords.longitude;
 
-  // Update dot
-  document.getElementById('gps-dot').className = '';
+
 
   // Move marker + map
   const ll = [lat, lng];
@@ -120,7 +117,7 @@ function onPosition(pos) {
 }
 
 function onError(err) {
-  document.getElementById('gps-dot').className = 'offline';
+
   const msgs = {
     1: 'Permissão negada',
     2: 'Posição indisponível',
