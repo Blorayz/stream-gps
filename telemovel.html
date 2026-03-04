@@ -23,13 +23,7 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 @keyframes gps-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
 .car-marker { width:20px; height:20px; background:#3B6CFF; border-radius:50%; border:3px solid #E8E9EA; box-shadow:0 0 12px rgba(59,108,255,.8); }
 
-/* Permission overlay */
-#perm-overlay { position:absolute; inset:0; background:rgba(17,18,20,.95); z-index:600; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border-radius:20px; }
-#perm-overlay.hidden { display:none; }
-#perm-overlay svg { opacity:.6; }
-#perm-overlay p { font-size:12px; color:#8A8F99; text-align:center; max-width:220px; line-height:1.6; }
-#perm-btn { background:#3B6CFF; color:#fff; border:none; border-radius:10px; padding:10px 24px; font-size:13px; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; letter-spacing:.3px; }
-#perm-btn:active { background:#2a55d4; }
+
 
 #bottom-bar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px 18px; background:#111214; gap:8px; }
 .nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
@@ -45,16 +39,6 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 <body>
 <div id="nav-widget">
   <div id="map">
-    <!-- Permission overlay -->
-    <div id="perm-overlay">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8E9EA" stroke-width="1.5">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-        <circle cx="12" cy="9" r="2.5"/>
-      </svg>
-      <p>Permite o acesso à localização para ativar o mapa em tempo real</p>
-      <button id="perm-btn">Ativar GPS</button>
-    </div>
-
     <div id="map-fade"></div>
     <div id="city-name">A localizar...</div>
     <div id="gps-dot" class="offline"></div>
@@ -104,9 +88,6 @@ function startGPS() {
     return;
   }
 
-  // Hide permission overlay
-  document.getElementById('perm-overlay').classList.add('hidden');
-
   watchId = navigator.geolocation.watchPosition(
     onPosition,
     onError,
@@ -147,13 +128,8 @@ function onError(err) {
   document.getElementById('city-name').textContent = msgs[err.code] || 'Erro GPS';
 }
 
-// --- Permission button ---
-document.getElementById('perm-btn').addEventListener('click', startGPS);
-
-// Try auto-start (works if permission was already granted)
-navigator.permissions && navigator.permissions.query({ name:'geolocation' }).then(result => {
-  if (result.state === 'granted') startGPS();
-});
+// Auto-start GPS immediately — triggers permission prompt on first run
+startGPS();
 
 // --- Nominatim reverse geocode ---
 async function fetchCity(lat, lng) {
