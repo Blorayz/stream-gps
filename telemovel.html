@@ -10,7 +10,7 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background: transparent; font-family: 'Inter', sans-serif; }
-#nav-widget { width:400px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
+#nav-widget { width:520px; background:#111214; border-radius:20px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.7); position:relative; }
 #map { width:100%; height:230px; position:relative; background:#1a1c1f; z-index:1; }
 .leaflet-tile { filter: invert(100%) hue-rotate(180deg) brightness(0.75) saturate(0.8) contrast(1.1) !important; }
 .leaflet-container { background:#111214 !important; }
@@ -30,9 +30,10 @@ body { background: transparent; font-family: 'Inter', sans-serif; }
 .nav-label { font-size:9px; font-weight:700; color:#8A8F99; text-transform:uppercase; letter-spacing:1.2px; line-height:1; }
 .nav-value { font-size:28px; font-weight:800; color:#E8E9EA; letter-spacing:-1px; line-height:1; }
 .nav-value.temp { color:#3B6CFF; }
+.nav-value.temp::after { content:'°C'; font-size:14px; font-weight:500; color:#8A8F99; margin-left:2px; vertical-align:super; }
 .nav-value.time { font-size:34px; }
-.nav-value.zone { color:#F0AD4E; font-size:15px; letter-spacing:0; text-align:center; }
-.nav-unit { font-size:11px; font-weight:500; color:#8A8F99; }
+.nav-value.zone { color:#F0AD4E; font-size:17px; letter-spacing:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+.nav-unit { display:none; }
 .nav-divider { width:1px; height:40px; background:rgba(255,255,255,.07); flex-shrink:0; }
 </style>
 </head>
@@ -145,7 +146,7 @@ async function fetchCity(lat, lng) {
     const city    = d.address?.city || d.address?.town || d.address?.village || '';
     document.getElementById('city-name').textContent = road || suburb || city || 'Em rota...';
     const zone = city || suburb || '--';
-    document.getElementById('zoneVal').textContent = zone.length > 10 ? zone.substring(0,10)+'…' : zone;
+    document.getElementById('zoneVal').textContent = zone;
   } catch(e) {}
 }
 
